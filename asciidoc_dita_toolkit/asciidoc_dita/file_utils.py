@@ -190,6 +190,46 @@ def process_adoc_files(args, process_file_func):
         for filepath in adoc_files:
             process_file_func(filepath)
 
+# Helper functions for path operations
+def _is_subpath(child_path, parent_path):
+    """
+    Check if child_path is a subpath of parent_path.
+    
+    Args:
+        child_path: Path that might be a child
+        parent_path: Path that might be the parent
+    
+    Returns:
+        True if child_path is under parent_path, False otherwise
+    """
+    try:
+        child_path = os.path.abspath(child_path)
+        parent_path = os.path.abspath(parent_path)
+        
+        # Use os.path.commonpath for safer comparison
+        try:
+            common = os.path.commonpath([child_path, parent_path])
+            return common == parent_path
+        except ValueError:
+            # Paths are on different drives (Windows) or other issues
+            return False
+    except (OSError, ValueError):
+        return False
+
+
+def _normalize_path_for_comparison(path):
+    """
+    Normalize a path for safe comparison operations.
+    
+    Args:
+        path: Path to normalize
+    
+    Returns:
+        Normalized absolute path
+    """
+    return os.path.abspath(os.path.normpath(path))
+
+
 # Directory Configuration Support
 def is_plugin_enabled(plugin_name):
     """
@@ -203,9 +243,11 @@ def is_plugin_enabled(plugin_name):
         True if plugin is enabled, False otherwise
     """
     # TODO: Implement actual plugin configuration system
-    # For MVP, DirectoryConfig is disabled by default (preview stage)
+    # For MVP, DirectoryConfig and ContentType are disabled by default (preview stage)
     if plugin_name == "DirectoryConfig":
         return os.environ.get("ADT_ENABLE_DIRECTORY_CONFIG", "false").lower() == "true"
+    if plugin_name == "ContentType":
+        return os.environ.get("ADT_ENABLE_CONTENT_TYPE", "false").lower() == "true"
     return True
 
 
@@ -400,9 +442,9 @@ def apply_directory_filters(base_path, config):
         intersecting_dirs = []
         for include_dir in include_dirs:
             full_include_path = os.path.abspath(os.path.join(repo_root, include_dir))
-            # Check if paths overlap
-            if (full_include_path.startswith(base_path) or 
-                base_path.startswith(full_include_path) or
+            # Check if paths overlap (using proper path comparison)
+            if (_is_subpath(full_include_path, base_path) or 
+                _is_subpath(base_path, full_include_path) or
                 base_path == full_include_path):
                 intersecting_dirs.append(full_include_path)
         
@@ -419,7 +461,7 @@ def apply_directory_filters(base_path, config):
             excluded = False
             for exclude_dir in exclude_dirs:
                 full_exclude_path = os.path.abspath(os.path.join(repo_root, exclude_dir))
-                if dir_path.startswith(full_exclude_path):
+                if _is_subpath(dir_path, full_exclude_path):
                     excluded = True
                     logger.warning(f"Directory '{dir_path}' is excluded by configuration")
                     break
@@ -476,18 +518,22 @@ def sanitize_directory_path(directory_path):
         return None
     
     # Remove dangerous patterns
-    dangerous_patterns = ["../", "..\\", "~/../", "./../"]
+    dangerous_patterns = ["../", "..\\"]
     sanitized = directory_path.strip()
     
-    for pattern in dangerous_patterns:
-        if pattern in sanitized:
-            return None
+    # Check for directory traversal attempts
+    if any(pattern in sanitized for pattern in dangerous_patterns):
+        return None
     
-    # Normalize path separators
+    # Check for null bytes or other control characters
+    if '\x00' in sanitized or any(ord(c) < 32 for c in sanitized if c not in '\t\n\r'):
+        return None
+    
+    # Normalize path separators and remove redundant elements
     sanitized = os.path.normpath(sanitized)
     
-    # Reject absolute paths that try to escape outside reasonable bounds
-    if os.path.isabs(sanitized) and not sanitized.startswith(("/home", "/usr", "/opt", "/var")):
+    # Additional check after normalization for traversal attempts
+    if '..' in sanitized.split(os.sep):
         return None
     
     return sanitized
@@ -520,13 +566,19 @@ def validate_directory_path(directory_path, base_path=None, require_exists=True)
         full_path = sanitized_path
     
     # Normalize and resolve the path
-    full_path = os.path.realpath(full_path)
+    try:
+        full_path = os.path.realpath(full_path)
+    except (OSError, ValueError) as e:
+        return False, f"Cannot resolve path: {e}"
     
     # Security check: ensure the resolved path is within base_path if provided
     if base_path:
-        base_path = os.path.realpath(base_path)
-        if not full_path.startswith(base_path + os.sep) and full_path != base_path:
-            return False, f"Directory must be within base path: {full_path}"
+        try:
+            base_path = os.path.realpath(base_path)
+            if not _is_subpath(full_path, base_path) and full_path != base_path:
+                return False, f"Directory must be within base path: {full_path}"
+        except (OSError, ValueError) as e:
+            return False, f"Cannot validate base path: {e}"
     
     if require_exists:
         if not os.path.exists(full_path):

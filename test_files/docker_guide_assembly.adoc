@@ -1,0 +1,14 @@
+= Complete Docker guide
+
+This assembly covers everything you need to know about Docker.
+
+include::what_is_containerization.adoc[leveloffset=+1]
+
+include::installing_docker.adoc[leveloffset=+1]
+
+include::docker_commands.adoc[leveloffset=+1]
+
+== Next steps
+
+* Try the Docker tutorials
+* Join the Docker community

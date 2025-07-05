@@ -1,0 +1,5 @@
+:_content-type: CONCEPT
+
+= Deprecated Content Type Test
+
+This file has a deprecated :_content-type: attribute.

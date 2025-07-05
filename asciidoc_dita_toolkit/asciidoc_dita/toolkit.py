@@ -7,6 +7,7 @@ It dynamically discovers plugins in the 'plugins' directory. Each plugin must de
 
 import argparse
 import importlib
+import importlib.metadata
 import os
 import sys
 
@@ -59,6 +60,11 @@ def main():
         action="store_true",
         help="List all available plugins and their descriptions",
     )
+    parser.add_argument(
+        "--version",
+        action="store_true",
+        help="Show the version of the AsciiDoc DITA Toolkit and exit",
+    )
     subparsers = parser.add_subparsers(dest="command", required=False)
 
     # Discover and register all plugins
@@ -82,6 +88,11 @@ def main():
             print(f"Error loading plugin '{modname}': {e}", file=sys.stderr)
 
     args = parser.parse_args()
+
+    if args.version:
+        version = importlib.metadata.version("asciidoc-dita-toolkit")
+        print(f"asciidoc-dita-toolkit {version}")
+        sys.exit(0)
 
     if args.list_plugins:
         print_plugin_list()

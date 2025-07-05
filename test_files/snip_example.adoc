@@ -1,0 +1,8 @@
+= Snippet Test
+
+This is a snippet file that should be detected by its filename prefix.
+
+[source,bash]
+----
+echo "Hello World"
+----

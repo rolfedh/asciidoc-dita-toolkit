@@ -1,0 +1,5 @@
+:_mod-docs-content-type:
+
+= Empty Content Type Test
+
+This file has an empty content type attribute.

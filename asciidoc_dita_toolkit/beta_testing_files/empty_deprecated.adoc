@@ -1,0 +1,5 @@
+:_content-type:
+
+= Empty Deprecated Content Type
+
+This file has an empty deprecated :_content-type: attribute.

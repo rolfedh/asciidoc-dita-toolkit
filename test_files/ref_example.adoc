@@ -1,0 +1,11 @@
+= Reference Test
+
+This is a reference file that should be detected by its filename prefix.
+
+== API Methods
+
+=== method1()
+Description of method1.
+
+=== method2()
+Description of method2.

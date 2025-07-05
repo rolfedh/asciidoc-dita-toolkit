@@ -1,0 +1,7 @@
+= Entity Reference Test
+
+This file contains HTML entities like {copy} and {mdash} and &quot;quotes&quot;.
+
+== Section 1
+
+More entities: &amp; &lt; &gt;

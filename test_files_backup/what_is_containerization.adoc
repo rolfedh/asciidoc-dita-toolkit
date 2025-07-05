@@ -1,0 +1,16 @@
+= What is containerization
+
+Containerization is a method of virtualization that packages applications with their dependencies.
+
+== Key concepts
+
+Containers provide several benefits:
+
+* Isolation between applications
+* Consistent environments across development and production
+* Efficient resource utilization
+* Simplified deployment processes
+
+== How it works
+
+Unlike traditional virtual machines, containers share the host operating system kernel while maintaining process isolation.

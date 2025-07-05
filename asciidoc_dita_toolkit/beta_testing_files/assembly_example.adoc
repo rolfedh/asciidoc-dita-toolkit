@@ -1,0 +1,7 @@
+= Assembly Test
+
+This is an assembly file that should be detected by its filename prefix.
+
+include::con_example.adoc[]
+
+include::proc_example.adoc[]

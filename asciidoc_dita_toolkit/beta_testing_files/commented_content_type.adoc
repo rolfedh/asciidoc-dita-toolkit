@@ -1,0 +1,9 @@
+//:_mod-docs-content-type: PROCEDURE
+
+= Commented Content Type Test
+
+This file has a commented-out content type.
+
+== Section 1
+
+Some content here.

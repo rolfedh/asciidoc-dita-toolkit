@@ -1,0 +1,5 @@
+:_mod-docs-content-type: CONCEPT
+
+= Missing Content Type Test
+
+This file has no content type attribute.

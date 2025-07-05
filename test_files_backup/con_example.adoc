@@ -1,0 +1,7 @@
+= Concept Test
+
+This is a concept file that should be detected by its filename prefix.
+
+== Overview
+
+This explains a concept.

@@ -1,0 +1,5 @@
+:_module-type: REFERENCE
+
+= Deprecated Module Type Test
+
+This file has a deprecated :_module-type: attribute.

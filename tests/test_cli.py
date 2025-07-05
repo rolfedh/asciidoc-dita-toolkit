@@ -23,7 +23,7 @@ class TestCLI(unittest.TestCase):
         plugins = toolkit.discover_plugins()
         self.assertIsInstance(plugins, list)
         self.assertIn("EntityReference", plugins)
-        self.assertIn("ContentType", plugins)
+        self.assertIn("ContentType", plugins)  # ContentType file exists, but may not be registered
 
     @patch("sys.stdout", new_callable=StringIO)
     def test_list_plugins(self, mock_stdout):
@@ -32,7 +32,7 @@ class TestCLI(unittest.TestCase):
         output = mock_stdout.getvalue()
         self.assertIn("Available plugins:", output)
         self.assertIn("EntityReference", output)
-        self.assertIn("ContentType", output)
+        # ContentType may or may not be listed depending on ADT_ENABLE_CONTENT_TYPE
 
     @patch("sys.argv", ["toolkit", "--list-plugins"])
     @patch("sys.exit")
@@ -97,6 +97,48 @@ class TestCLI(unittest.TestCase):
         # argparse exits with code 0 for --help
         self.assertEqual(cm.exception.code, 0)
 
+    @patch.dict(os.environ, {}, clear=True)
+    @patch("sys.argv", ["toolkit", "--help"])
+    @patch("sys.stdout", new_callable=StringIO)
+    def test_content_type_disabled_by_default(self, mock_stdout):
+        """Test that ContentType plugin is disabled by default."""
+        try:
+            toolkit.main()
+        except SystemExit:
+            pass  # argparse calls sys.exit after showing help
+
+        output = mock_stdout.getvalue()
+        # ContentType should not appear in subcommands when disabled
+        self.assertNotIn("ContentType", output)
+
+    @patch.dict(os.environ, {"ADT_ENABLE_CONTENT_TYPE": "true"})
+    @patch("sys.argv", ["toolkit", "--help"])
+    @patch("sys.stdout", new_callable=StringIO)
+    def test_content_type_enabled_via_env(self, mock_stdout):
+        """Test that ContentType plugin can be enabled via environment variable."""
+        try:
+            toolkit.main()
+        except SystemExit:
+            pass  # argparse calls sys.exit after showing help
+
+        output = mock_stdout.getvalue()
+        # ContentType should appear in subcommands when enabled
+        self.assertIn("ContentType", output)
+
+    @patch.dict(os.environ, {"ADT_ENABLE_CONTENT_TYPE": "false"})
+    @patch("sys.argv", ["toolkit", "--help"])
+    @patch("sys.stdout", new_callable=StringIO)
+    def test_content_type_explicitly_disabled(self, mock_stdout):
+        """Test that ContentType plugin can be explicitly disabled."""
+        try:
+            toolkit.main()
+        except SystemExit:
+            pass  # argparse calls sys.exit after showing help
+
+        output = mock_stdout.getvalue()
+        # ContentType should not appear when explicitly disabled
+        self.assertNotIn("ContentType", output)
+
 
 class TestEntityReferencePlugin(unittest.TestCase):
     """Test cases for the EntityReference plugin."""
@@ -158,44 +200,82 @@ class TestContentTypePlugin(unittest.TestCase):
                 result = self.plugin.get_content_type_from_filename(filename)
                 self.assertEqual(result, expected)
 
-    def test_add_content_type_label_new_file(self):
-        """Test adding content type label to a file without one."""
-        with tempfile.NamedTemporaryFile(mode="w+", suffix=".adoc", delete=False) as tmp:
-            tmp.write("= Test Document\n\nContent here.\n")
-            tmp.flush()
+    def test_detect_existing_content_type(self):
+        """Test detection of existing content type attributes."""
+        test_cases = [
+            ([("text", "\n"), (":_mod-docs-content-type: CONCEPT", "\n")], ("CONCEPT", 1, "current")),
+            ([("text", "\n"), (":_content-type: PROCEDURE", "\n")], ("PROCEDURE", 1, "deprecated_content")),
+            ([("text", "\n"), (":_module-type: REFERENCE", "\n")], ("REFERENCE", 1, "deprecated_module")),
+            ([("text", "\n"), ("no content type", "\n")], (None, None, None)),
+        ]
+        
+        for lines, expected in test_cases:
+            with self.subTest(lines=lines):
+                result = self.plugin.detect_existing_content_type(lines)
+                self.assertEqual(result, expected)
 
-            try:
-                with patch("builtins.print") as mock_print:
-                    self.plugin.add_content_type_label(tmp.name, "CONCEPT")
+    def test_analyze_title_style(self):
+        """Test content type suggestions based on title analysis."""
+        test_cases = [
+            ("= Creating a new project", "PROCEDURE"),
+            ("= Docker commands reference", "REFERENCE"),
+            ("= Getting started guide", "ASSEMBLY"),
+            ("= What is containerization", "CONCEPT"),
+            (None, None),
+        ]
+        
+        for title, expected in test_cases:
+            with self.subTest(title=title):
+                result = self.plugin.analyze_title_style(title)
+                self.assertEqual(result, expected)
 
-                with open(tmp.name, "r") as f:
-                    content = f.read()
+    def test_analyze_content_patterns(self):
+        """Test content type suggestions based on content analysis."""
+        test_cases = [
+            ("This document includes:\ninclude::other.adoc[]", "ASSEMBLY"),
+            ("1. First step\n2. Second step\n.Procedure", "PROCEDURE"),
+            ("|====\n|Column 1|Column 2\n|Value 1|Value 2\n|====", "REFERENCE"),
+            ("This is just regular content.", None),
+        ]
+        
+        for content, expected in test_cases:
+            with self.subTest(content=content):
+                result = self.plugin.analyze_content_patterns(content)
+                self.assertEqual(result, expected)
 
-                self.assertIn(":_mod-docs-content-type: CONCEPT", content)
-                mock_print.assert_called()
-            finally:
-                os.unlink(tmp.name)
+    def test_get_document_title(self):
+        """Test extraction of document title from file lines."""
+        test_cases = [
+            ([("= Main Title", "\n"), ("content", "\n")], "Main Title"),
+            ([("# Markdown Title", "\n"), ("content", "\n")], "Markdown Title"),
+            ([("content", "\n"), ("= Title Later", "\n")], "Title Later"),
+            ([("content", "\n"), ("no title", "\n")], None),
+            ([], None),
+        ]
+        
+        for lines, expected in test_cases:
+            with self.subTest(lines=lines):
+                result = self.plugin.get_document_title(lines)
+                self.assertEqual(result, expected)
 
-    def test_add_content_type_label_existing_label(self):
-        """Test that existing labels are not overwritten."""
-        with tempfile.NamedTemporaryFile(mode="w+", suffix=".adoc", delete=False) as tmp:
-            tmp.write(":_mod-docs-content-type: PROCEDURE\n= Test Document\n\nContent here.\n")
-            tmp.flush()
-
-            try:
-                with patch("builtins.print") as mock_print:
-                    self.plugin.add_content_type_label(tmp.name, "CONCEPT")
-
-                with open(tmp.name, "r") as f:
-                    content = f.read()
-
-                # Should still have the original label
-                self.assertIn(":_mod-docs-content-type: PROCEDURE", content)
-                # Should not have the new label
-                self.assertNotIn(":_mod-docs-content-type: CONCEPT", content)
-                mock_print.assert_called_with(f"Skipping {tmp.name}, label already present")
-            finally:
-                os.unlink(tmp.name)
+    def test_ensure_blank_line_below(self):
+        """Test ensuring blank line after content type attribute."""
+        # Test case: line at end of file
+        lines = [("content", "\n"), (":_mod-docs-content-type: CONCEPT", "\n")]
+        result = self.plugin.ensure_blank_line_below(lines, 1)
+        self.assertEqual(len(result), 3)
+        self.assertEqual(result[2], ("", "\n"))
+        
+        # Test case: no blank line after attribute
+        lines = [("content", "\n"), (":_mod-docs-content-type: CONCEPT", "\n"), ("more content", "\n")]
+        result = self.plugin.ensure_blank_line_below(lines, 1)
+        self.assertEqual(len(result), 4)
+        self.assertEqual(result[2], ("", "\n"))
+        
+        # Test case: blank line already exists
+        lines = [("content", "\n"), (":_mod-docs-content-type: CONCEPT", "\n"), ("", "\n"), ("more content", "\n")]
+        result = self.plugin.ensure_blank_line_below(lines, 1)
+        self.assertEqual(len(result), 4)  # Should not add another blank line
 
 
 if __name__ == "__main__":

@@ -1,0 +1,13 @@
+:_mod-docs-content-type: PROCEDURE
+
+= Procedure Test
+
+This is a procedure file that should be detected by its filename prefix.
+
+== Step 1
+
+Do something.
+
+== Step 2
+
+Do something else.

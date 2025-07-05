@@ -1,0 +1,19 @@
+= Docker command reference
+
+This reference lists all available Docker commands.
+
+== Basic commands
+
+[options="header"]
+|====
+|Command|Description|Example
+|docker run|Run a container|docker run ubuntu
+|docker ps|List containers|docker ps -a
+|docker stop|Stop container|docker stop myapp
+|====
+
+== Advanced commands
+
+docker build:: Build an image from Dockerfile
+docker push:: Push image to registry
+docker pull:: Pull image from registry

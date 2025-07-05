@@ -1,0 +1,18 @@
+= Installing Docker
+
+This guide shows you how to install Docker on your system.
+
+.Prerequisites
+* You have administrator access
+* System meets minimum requirements
+
+.Procedure
+1. Download the Docker installer
+2. Run the installation wizard
+3. Verify the installation by running `docker --version`
+
+.Verification
+Run the following command to verify Docker is working:
+```
+docker run hello-world
+```
