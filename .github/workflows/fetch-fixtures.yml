@@ -31,7 +31,7 @@ jobs:
           title: "chore: update test fixtures from asciidoctor-dita-vale"
           body: |
             This PR updates the test fixtures from the upstream asciidoctor-dita-vale repository.
-            Please review the changes to .expected files and fixtures.
+            Please review the any changes to fixtures and update the corresponding fixes accordingly.
           reviewers: |
             rolfedh
           delete-branch: true

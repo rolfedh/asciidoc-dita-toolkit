@@ -120,25 +120,69 @@ Finally, some rule violations have **non-deterministic fixes**. In this case, Ad
 7. When the user notifies it that the PR has been merged, Aditi checks out the main branch,reruns the rule, notifies the user of any unresolved issues and asks the user if they want to fix the issue (return to step 1) or mark this rule as done and continue to the next rule.
 
 
-## Sequence of rules
+## Sequence of operations
 
 
-### Stage 1: Configuration
+### Stage 1: Configuration (Aditi CLI Interaction Example)
 
-- User enters `aditi journey`
-- Prompt: "Use cd to get to the root directory of your repository." (How does the user confirm when they're done and ready for the next prompt?)
-- Prompt: "Check out your default branch, typically `main`." (How to confirm?)
-- Prompt: "Specify any release branches you plan to update. Such as <give examples>"
-- Prompt: "Use `git rebase --hard upstream/main` or whatever to ensure you're starting clean." (confirm?)
-- Prompt: The above information and ask them to confirm. (confirm?)
-- Create `~/aditi-data` and save the above data in a *.json file.
-- Prompt "Aditi runs in your root directory and all its subdirectories (recommended)."
-- Prompt "Do you want to allow or deny specific subdirectories?"
-- Prompt "If so, enter `allow: <directory_path>` or `block: <directory_path>` any number of times and enter  (something?) to save your choices."
-- Display the choices ask them to confirm. Save this to `~/aditi-data/config.json`. (Every time you update `config.json`, create a timestamped backup copy `config.<timestamp>.json`.)
-- Create a feature branch
+User enters: `aditi journey`
 
-MVP alternative: Give written instructions or checklist to user. Tell them to review and update `config.json` directly. Include commented-out examples of optional data in `config.json`.
+```bash
+Aditi: "Welcome to Aditi! Let's set up your documentation migration journey."
+Aditi: "Step 1: Use `cd` to navigate to the root directory of your documentation repository. Enter `done` when finished."
+User: (navigates to the directory and enters `done`.)
+
+Aditi: "Step 2: Check out your repository's default branch. For example, enter `git checkout main`.  Enter `done` when finished."
+User: (runs command and enters `done`.)
+
+Aditi: "Step 3: Specify any release branches you plan to update, separated by commas. For example, `release-123, release-456`. Enter `done` when finished."
+User: `quarkus-3-15, quarkus-3-20`
+
+Aditi: "Step 4: Update your branches. Run:
+git fetch upstream
+git rebase upstream/main
+git checkout quarkus-3-15
+git rebase upstream/quarkus-3-15
+git checkout quarkus-3-20
+git rebase upstream/quarkus-3-20"
+Aditi: "Enter `done` when finished."
+
+User: (runs command and presses Enter)
+
+Aditi: "Step 5: Please confirm the following information:"
+Aditi: "  - Repository root: /home/rolfedh/my-docs-repo"
+Aditi: "  - Default branch: main"
+Aditi: "  - Release branches: release-2025, hotfix-2025-07"
+Aditi: "Is this correct? (Y/n)"
+User: `y`
+
+Aditi: "Saved configuration to ~/aditi-data/config.json..."
+
+Aditi: "Step 6: By default, Aditi will run in your repository root and all subdirectories."
+Aditi: "Would you like to allow or block specific subdirectories? (yes/no)"
+User: `yes`
+
+Aditi: "Enter `allow: <directory_path>` or `block: <directory_path>` for each directory. Enter `done` when finished."
+User:
+allow: docs/user-guide
+allow: docs/api
+block: docs/drafts
+done
+
+Aditi: "Here are your subdirectory permissions:"
+Aditi: "  - Allowed: docs/user-guide, docs/api"
+Aditi: "  - Blocked: docs/drafts"
+Aditi: "Confirm these choices? (yes/no)"
+User: `yes`
+
+Aditi: "Saving updated configuration to ~/aditi-data/config.json and creating a timestamped backup."
+
+Aditi: "Step 7: Please enter a name for your feature branch (e.g., `aditi-contenttype-fix`):"
+User: `aditi-contenttype-fix`
+
+Aditi: "Creating feature branch: aditi-contenttype-fix"
+Aditi: "Configuration complete! You are ready to begin your migration journey."
+```
 
 For example:
 ```json
@@ -158,28 +202,115 @@ For example:
 }
 ```
 
+### Stage 2: Prerequisites
 
+#### ContentType rule
+
+ContentType: Without a clear content type definition, the Vale style cannot reliably report problems related to procedure modules such as `TaskSection` or `TaskExample`. Add the correct `:_mod-docs-content-type:` definition at the top of the file.
+
+Valid attribute values:
+- `ASSEMBLY`
+- `CONCEPT`
+- `PROCEDURE`
+- `REFERENCE`
+- `SNIPPET`
+
+Placeholder non-valid attribute value:
+- `TBD`
+
+Obsolete or deprecated attribute names:
+- `:_content-type:`
+- `:_module-type:`
+
+Fix type: partially deterministic fixes
+
+Fixtures path: https://github.com/jhradilek/asciidoctor-dita-vale/tree/main/fixtures/ContentType
+
+Develop regex rules:
+- Use the files named `report*.doc` to detect rule violations.
+- Use the files named `ignore*.doc` to exclude rule violations.
+
+Fixes:
+- For https://raw.githubusercontent.com/jhradilek/asciidoctor-dita-vale/refs/heads/main/fixtures/ContentType/report_comments.adoc, uncomment the line that contains `:_mod-docs-content-type:`
+- For https://raw.githubusercontent.com/jhradilek/asciidoctor-dita-vale/refs/heads/main/fixtures/ContentType/report_missing_type.adoc insert `:_mod-docs-content-type:`.
+- For - For https://raw.githubusercontent.com/jhradilek/asciidoctor-dita-vale/refs/heads/main/fixtures/ContentType/report_missing_type.adoc and https://raw.githubusercontent.com/jhradilek/asciidoctor-dita-vale/refs/heads/main/fixtures/ContentType/report_missing_value.adoc, assign a valid value based on the `detect_existing_attribute` or `filename_prefixes`. Otherwise, assign `TBD`, a non-valid placeholder value.
+
+Use the following code or some variation of it for inspiration, at your discretion:
+
+```python
+    def get_default(cls) -> 'ContentTypeConfig':
+        """Get default configuration for content type detection."""
+        return cls(
+            filename_prefixes={
+                ("assembly_", "assembly-"): "ASSEMBLY",
+                ("con_", "con-"): "CONCEPT",
+                ("proc_", "proc-"): "PROCEDURE",
+                ("ref_", "ref-"): "REFERENCE",
+                ("snip_", "snip-"): "SNIPPET",
+            },
+        )
+```
+
+```python
+    def detect_existing_attribute(
+        self, lines: List[Tuple[str, str]]
+    ) -> Optional[ContentTypeAttribute]:
+        """
+        Detect existing content type attributes in file.
+
+        Args:
+            lines: List of (text, ending) tuples from file
+
+        Returns:
+            ContentTypeAttribute or None if not found
+        """
+        logger.debug("Detecting existing content type attributes")
+
+        for i, (text, _) in enumerate(lines):
+            stripped = text.strip()
+
+            # Current format
+            if stripped.startswith(":_mod-docs-content-type:"):
+                value = stripped.split(":", 2)[-1].strip()
+                logger.debug("Found current format content type: %s", value)
+                return ContentTypeAttribute(value, i, 'current')
+
+            # Commented-out current format
+            if stripped.startswith("//:_mod-docs-content-type:"):
+                value = stripped.split(":", 2)[-1].strip()
+                logger.debug("Found commented content type: %s", value)
+                return ContentTypeAttribute(value, i, 'commented')
+
+            # Deprecated formats
+            if stripped.startswith(":_content-type:"):
+                value = stripped.split(":", 2)[-1].strip()
+                logger.debug("Found deprecated content-type: %s", value)
+                return ContentTypeAttribute(value, i, 'deprecated_content')
+
+            if stripped.startswith(":_module-type:"):
+                value = stripped.split(":", 2)[-1].strip()
+                logger.debug("Found deprecated module-type: %s", value)
+                return ContentTypeAttribute(value, i, 'deprecated_module')
+
+        logger.debug("No existing content type attributes found")
+        return None
+```
+
+- Ensure `:_mod-docs-content-type:` is followed by a blank line. Add one, if needed.
+
+Based on the [asciidoctor-dita-vale available rules](https://github.com/jhradilek/asciidoctor-dita-vale?tab=readme-ov-file#available-rules):
+
+**ContentType** is a prerequisite for several other rules, because many rules depend on the correct identification of the module type. The **TaskSection**, **TaskExample**, **TaskStep**, **TaskTitle**, and **TaskDuplicate** rules only apply to modules identified as procedures (i.e., files with `:_mod-docs-content-type: PROCEDURE` attribute). Otherwise, if this attribute is missing or incorrect, these rules cannot reliably detect or fix violations.
+
+## About asciidoctor-dita-vale fixtures (TODO Move section selsewhere)
+
+Reuse the following files from /home/rolfedh/asciidoc-dita-toolkit to get the latest fixtures from https://github.com/jhradilek/asciidoctor-dita-vale/tree/main/fixtures:
+
+- /home/rolfedh/asciidoc-dita-toolkit/.github/workflows/fetch-fixtures.yml
+- /home/rolfedh/asciidoc-dita-toolkit/archive/fetch-fixtures.sh
+
+Run a GitHub action to get these weekly. Create a PR if there are any changes.
 
 ## EntityReference rule
 
 EntityReference: DITA 1.3 supports five character entity references defined in the XML standard: &amp;, &lt;, &gt;, &apos;, and &quot;. Replace any other character entity references with [an appropriate built-in AsciiDoc attribute](https://docs.asciidoctor.org/asciidoc/latest/attributes/character-replacement-ref/).
-
-## ContentType rule
-
-ContentType: Without a clear content type definition, the Vale style cannot reliably report problems related to procedure modules such as `TaskSection` or `TaskExample`. Add the correct `:_mod-docs-content-type:` definition at the top of the file.
-
-===
-Before making any changes, the user or Aditi must do the following or confirm that the following has been done:
-- cd to the root directory of the documentation repository.
-- checkout main and git fetch and rebase to get the latest changes from upstrea/main (or the default directory).
-- create a feature branch
-- Give the user the option to do the following:
-  - restrict operations to specific subdirectories.
-  - exclude operations from specific subdirectories.
-
-The above capabilities might require git integration.
-
-The user or Aditi specifies a rule in the AsciiDocDITA ruleset to work on.
-Some rules require that violations for previous rules have been    \                                                                                      │
-│   1. Aditi lints the *.adoc files for that rule and takes the output. \                     │
-│   2. For rules that have a deterministic fix, Aditi fixes the issue.
